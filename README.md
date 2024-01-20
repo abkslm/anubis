@@ -7,7 +7,7 @@ in after the cutoff.
 
 ## Installation:
 
-- Modify the `ALIASES` dictionary `anubis.py` to contain hosts and their range.
+- Modify the `ALIASES` dictionary within `anubis.py` to contain hosts and their range.
   For example, if a Ballast alias `alias` exists, and hostnames are within range
   `[1-5]` (eg `alias1`, `alias2` ... `alias5`), the proper entry would be:
   `"alias":[1,5]`.
