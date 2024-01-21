@@ -129,12 +129,6 @@ def random_host_order(start: int, end: int):
     return random_set
 
 
-def ssh_out(host: str):
-    sys.stdout.write("socat stdio tcp:" + host + ":22")
-    sys.stdout.flush()
-    exit(0)
-
-
 def ssh_relay(host: str):
     subprocess.run(["nc", host, "22"])
 
@@ -221,7 +215,7 @@ def anubis():
             host = (alias + random_host_set[runs])
             if host_is_alive(host):
                 if relay_mode:
-                    ssh_out(host)
+                    ssh_relay(host)
                 else:
                     connected = connect(host)
 
