@@ -6,8 +6,13 @@ import sys
 ALIASES = {"beagle": [1, 5]}
 
 
+def print_option(string: str, silent: bool):
+    if not silent:
+        print(string, end='')
+
+
 def fail(msg: str, code: int):
-    print(msg, flush=True)
+    print(msg)
     sys.exit(code)
 
 
@@ -18,11 +23,12 @@ def fail_usage():
          "\t\"anubis <alias>\" or \"anubis -c (or --connect) <alias>\" to connect\n"
          "\t\"anubis -s (or --status) <alias>\" for alias status\n"
          "\t\"anubis -s (or --status)\" for global status\n"
-         "\n\t\"anb\" can be used in place of \"anubis\"\n", 1)
+         "\n\t\"anb\" can be used in place of \"anubis\"\n\n", 1)
 
 
 def parse_args(args: [str]) -> {}:
-    parsed = {"alias": "", "status": False, "connect": False, "last": False}
+
+    parsed = {"alias": "", "status": False, "connect": False, "last": False, "ssh": False}
 
     if not ("--connect" in args or "-c" in args or "--status" in args or "-s" in args):
         if len(args) > 1:
@@ -32,6 +38,8 @@ def parse_args(args: [str]) -> {}:
                 parsed["connect"] = True
                 if "--last" in args or "-l" in args:
                     parsed["last"] = True
+                if "--ssh" in args:
+                    parsed["ssh"] = True
         else:
             fail_usage()
 
@@ -51,6 +59,9 @@ def parse_args(args: [str]) -> {}:
                 fail("Alias " + alias + " is not valid!", 1)
         else:
             fail("Alias missing! Usage: \"alias\" or \"-c alias\"", 1)
+
+        if "--ssh" in args:
+            parsed["ssh"] = True
 
         if "--last" in args or "-l" in args:
             parsed["last"] = True
@@ -100,14 +111,21 @@ def ballast_suggest(alias: str) -> str:
         """, 2)
 
 
+def ssh_out(host: str):
+    sys.stdout.write(host)
+    sys.stdout.flush()
+    exit(0)
+
+
 def connect(host: str):
     try:
         connected = False
         print("\nConnecting to host: " + host + "...\n")
+
         status = subprocess.run(["ssh", host]).returncode
         if status == 0:
             connected = True
-            print("\nAnubis session ended. Goodbye!\n\n", end='')
+            print("\nanubis session ended. Goodbye!\n")
         return connected
     except subprocess.CalledProcessError:
         fail("Anubis failed to connect to the Ballast-suggested host!", 2)
@@ -141,38 +159,53 @@ def print_statuses(alias: str):
 
 
 def anubis():
+
     parsed = parse_args(sys.argv)
-
     alias = parsed["alias"]
+    ssh_mode = parsed["ssh"]
 
-    print("Running anubis...")
+    if not (parsed["connect"] or parsed["status"]):
+        fail_usage()
+
+    print_option("\nRunning anubis...", ssh_mode)
 
     if parsed["connect"]:
         connected = False
         offline: [str] = []
 
         if parsed["last"]:
-            print("\nAttempting connection to last " + alias + " host...", end='')
+            print_option("\nAttempting connection to last " + alias + " host...", ssh_mode)
             if connect(alias + "-last"):
                 exit(0)
 
-        print("\nFinding optimal host for alias: " + alias + "...", end='')
+        print_option("\nFinding optimal host for alias: " + alias + "...", ssh_mode)
 
         runs = 1
         suggested_host = ballast_suggest(alias)
         while not connected and len(offline) < ALIASES[alias][1] and runs < ALIASES[alias][1] * 2:
-            print("...", end='')
+            print_option("...", ssh_mode)
             if suggested_host not in offline and host_is_alive(suggested_host):
+                if ssh_mode:
+                    ssh_out(suggested_host)
                 exit(0) if connect(suggested_host) else offline.append(suggested_host)
             elif suggested_host not in offline:
                 offline.append(suggested_host)
             suggested_host = ballast_suggest(alias)
             runs += 1
 
+        host_id = 1
+        while not connected and host_id <= ALIASES[alias][1]:
+            host = (alias + str(host_id))
+            if host_is_alive(host):
+                if ssh_mode:
+                    ssh_out(host)
+                else:
+                    connected = connect(host)
+
         if not connected:
             fail("No hosts for alias " + alias + " online!"
                                                  "If this error persists, please contact support@cs.usfca.edu", 1)
-        print()
+        print_option("\n", ssh_mode)
 
     elif parsed["status"]:
         if alias:
