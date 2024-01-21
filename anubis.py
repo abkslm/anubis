@@ -106,10 +106,11 @@ def ballast_suggest(alias: str) -> str:
     try:
         return subprocess.check_output(["/usr/local/bin/ballast", "-l", alias]).decode("utf-8").split('.')[0]
     except subprocess.CalledProcessError:
-        fail("""
-        Ballast failed to suggest a host!
-        Please contact support@cs.usfca.edu if this error persists.
-        """, 2)
+        # fail("""
+        # Ballast failed to suggest a host!
+        # Please contact support@cs.usfca.edu if this error persists.
+        # """, 2)
+        return ""
 
 
 def random_host_order(start: int, end: int):
@@ -198,20 +199,25 @@ def anubis():
 
         host_id = 1
         suggested_host = ballast_suggest(alias)
-        while not connected and len(offline) < ALIASES[alias][1] and host_id < ALIASES[alias][1] * 2:
-            print_option("...", relay_mode)
-            if suggested_host not in offline and host_is_alive(suggested_host):
-                if relay_mode:
-                    ssh_relay(suggested_host)
-                exit(0) if connect(suggested_host) else offline.append(suggested_host)
-            elif suggested_host not in offline:
-                offline.append(suggested_host)
-            suggested_host = ballast_suggest(alias)
-            host_id += 1
+        if suggested_host:
+            while not connected and len(offline) < ALIASES[alias][1] and host_id < ALIASES[alias][1] * 2:
+                print_option("...", relay_mode)
+                if suggested_host not in offline and host_is_alive(suggested_host):
+                    if relay_mode:
+                        ssh_relay(suggested_host)
+                    exit(0) if connect(suggested_host) else offline.append(suggested_host)
+                elif suggested_host not in offline:
+                    offline.append(suggested_host)
+                suggested_host = ballast_suggest(alias)
+                if not suggested_host:
+                    break
+                host_id += 1
 
+        print_option("Ballast offline! Picking a host at random...", relay_mode)
         runs = 0
         random_host_set = random_host_order(ALIASES[alias][0], ALIASES[alias][1])
         while not connected and runs < len(random_host_set):
+            print_option("...", relay_mode)
             host = (alias + random_host_set[runs])
             if host_is_alive(host):
                 if relay_mode:
