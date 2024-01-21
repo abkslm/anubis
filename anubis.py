@@ -1,3 +1,5 @@
+#!/usr/bin/python3 -u
+
 import subprocess
 import sys
 
@@ -5,9 +7,20 @@ ALIASES = {"beagle": [1, 5]}
 
 
 def parse_args(args: [str]) -> {}:
-    parsed = {"alias": "", "status": True, "connect": False}
+    parsed = {"alias": "", "status": False, "connect": False, "last": False}
 
-    if ("--connect" in args or "-c" in args) and ("--status" not in args and "-s" not in args):
+    if not ("--connect" in args or "-c" in args or "--status" in args or "-s" in args):
+        if len(args) > 1:
+            alias = args[1]
+            if alias in ALIASES.keys():
+                parsed["alias"] = alias
+                parsed["connect"] = True
+                if "--last" in args or "-l" in args:
+                    parsed["last"] = True
+        else:
+            fail_usage()
+
+    elif ("--connect" in args or "-c" in args) and ("--status" not in args and "-s" not in args):
         alias_idx = -1
 
         if "--connect" in args:
@@ -22,13 +35,16 @@ def parse_args(args: [str]) -> {}:
             else:
                 fail("Alias " + alias + " is not valid!", 1)
         else:
-            fail("Alias missing! Usage: \"--flag alias\"", 1)
+            fail("Alias missing! Usage: \"alias\" or \"--flag alias\"", 1)
+
+        if "--last" in args or "-l" in args:
+            parsed["last"] = True
 
         parsed["status"] = False
         parsed["connect"] = True
 
-    elif ("--status" in args or "-s" in args) and ("--connect" not in args and "-c" not in args):
-        alias_idx: int
+    elif ("--status" in args or "-s" in args) and "--connect" not in args and "-c" not in args:
+        alias_idx: -1
 
         if "--status" in args:
             alias_idx = args.index("--status") + 1
@@ -41,18 +57,32 @@ def parse_args(args: [str]) -> {}:
                 parsed["alias"] = alias
             else:
                 fail("Alias " + alias + " is not valid!", 1)
+        parsed["status"] = True
+
+    else:
+        fail_usage()
 
     return parsed
 
 
 def fail(msg: str, code: int):
-    print(msg)
-    exit(code)
+    print(msg, flush=True)
+    sys.exit(code)
+
+
+def fail_usage():
+    fail("\nIncorrect Usage!\n"
+         "\nUsage:\n"
+         "\n\tan \"<alias>\" is a system group name, for example: \"beagle\"\n\n"
+         "\t\"anubis <alias>\" or \"anubis -c <alias>\" (or --connect) to connect\n"
+         "\t\"anubis -s (or --status) <alias>\" for alias status\n"
+         "\t\"anubis -s (or --status)\" for global status\n"
+         "\n\t\"anb\" can be used in place of \"anubis\"\n", 1)
 
 
 def host_is_alive(host: str) -> bool:
     try:
-        status, _ = subprocess.getstatusoutput("ping -c 1" + host)
+        status, _ = subprocess.getstatusoutput("ping -c 1 -w 1 " + host)
         if status == 0:
             return True
         return False
@@ -61,9 +91,8 @@ def host_is_alive(host: str) -> bool:
 
 
 def ballast_suggest(alias: str) -> str:
-    print("Requesting host for " + alias + "...")
     try:
-        return subprocess.check_output(["/usr/local/bin/ballast", "-l", alias]).decode("utf-8")
+        return subprocess.check_output(["/usr/local/bin/ballast", "-l", alias]).decode("utf-8").split('.')[0]
     except subprocess.CalledProcessError:
         fail("""
         Ballast failed to suggest a host!
@@ -73,68 +102,81 @@ def ballast_suggest(alias: str) -> str:
 
 def connect(host: str):
     try:
-        print("Connecting to host: " + host + "...")
+        print("\nConnecting to host: " + host + "...\n")
         subprocess.run(["ssh", host])
-        # print("Connected to host: " + host + "!")
     except subprocess.CalledProcessError:
         fail("Anubis failed to connect to the Ballast-suggested host!", 2)
 
 
+def print_statuses(alias: str):
+    print("\nStatus for nodes in alias " + alias + ":")
+
+    start_id = ALIASES[alias][0]
+    end_id = ALIASES[alias][1]
+
+    statuses = {}
+
+    print("Pinging...", end='')
+
+    for i in range(start_id, end_id + 1):
+        host = alias + str(i)
+        if host_is_alive(host):
+            statuses[host] = True
+        else:
+            statuses[host] = False
+        print("...", end='')
+    print("Done.\n")
+
+    for host in statuses.keys():
+        if statuses[host]:
+            print(str(host) + ": ✅ online\n", end='')
+        else:
+            print(str(host) + ": ❌ offline\n", end='')
+    print()
+
+
 def anubis():
-
-    print("Running Anubis...")
-
     parsed = parse_args(sys.argv)
 
     alias = parsed["alias"]
 
+    print("Running anubis...")
+
     if parsed["connect"]:
         offline = [str]
         connected = False
-        suggested_host = ballast_suggest(alias)
-        while not connected and len(offline) < ALIASES[alias][1]:
-            if suggested_host not in offline and host_is_alive(suggested_host):
-                connect(suggested_host)
-                connected = True
-                # break
-            else:
-                offline.append(suggested_host)
+        if parsed["last"]:
+            print("\nAttempting connection to last " + alias + " host", end='')
+            connect(alias + "-last")
+        else:
+            print("\nFinding optimal host for alias " + alias + "...", end='')
+            runs = 0
+            suggested_host = ballast_suggest(alias)
+            while not connected and len(offline) < ALIASES[alias][1] and runs < ALIASES[alias][1] * 2:
+                print("...", end='')
+                if suggested_host not in offline and host_is_alive(suggested_host):
+                    connect(suggested_host)
+                    connected = True
+                elif suggested_host not in offline:
+                    offline.append(suggested_host)
                 suggested_host = ballast_suggest(alias)
+                runs += 1
+            if not connected:
+                fail("No hosts for alias " + alias + " online!"
+                                                     "If this error persists, please contact support@cs.usfca.edu", 1)
+            print()
 
     elif parsed["status"]:
         if alias:
-            start_id = ALIASES[alias][0]
-            end_id = ALIASES[alias][1]
-
-            host = alias + str(start_id)
-            if host_is_alive(host):
-                print("\n" + host + ": online\n", end='')
-            else:
-                print("\n" + host + ": offline\n", end='')
-
-            start_id += 1
-
-            for i in range(start_id, end_id + 1):
-                host = alias + str(i)
-                if host_is_alive(host):
-                    print(host + ": online\n", end='')
-                else:
-                    print(host + ": offline\n", end='')
+            print_statuses(alias)
         else:
+            print("\nGlobal Status:")
             for alias in ALIASES.keys():
-
-                print("\nStatus for nodes in alias " + alias + ":\n", end='')
-
-                start_id = ALIASES[alias][0]
-                end_id = ALIASES[alias][1]
-
-                for i in range(start_id, end_id + 1):
-                    host = alias + str(i)
-                    if host_is_alive(host):
-                        print(host + ": online\n", end='')
-                    else:
-                        print(host + ": offline\n", end='')
-                print()
+                print_statuses(alias)
 
 
-anubis()
+try:
+    anubis()
+except KeyboardInterrupt:
+    print("\n\nKeyboardInterrupt Detected, exiting anubis.\n"
+          "Goodbye!\n")
