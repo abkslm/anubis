@@ -7,6 +7,8 @@ in after the cutoff.
 
 ## Installation:
 
+anubis should be installed on the Ballast client.
+
 - Modify the `ALIASES` dictionary within `anubis.py` to contain hosts and their range.
   For example, if a Ballast alias `alias` exists, and hostnames are within range
   `[1-5]` (eg `alias1`, `alias2` ... `alias5`), the proper entry would be:
@@ -19,6 +21,14 @@ in after the cutoff.
   mentioned earlier handles this automatically)
   - `chown anubis.py root`
   - `chmod 755 anubis.py`
+  - Create a file `/etc/ssh/ssh_conf.d/75-anubis.conf` with contents:
+      ```
+      Host some-alias some-alias.example.com
+        ProxyCommand python3 /usr/local/bin/anubis.py --connect %h
+      Host some-alias-last some-alias-last.example.com
+        ProxyCommand python3 /usr/local/bin/ballast %h
+      ```
+  
 
 ## Usage:
 - `anubis --connect alias`
