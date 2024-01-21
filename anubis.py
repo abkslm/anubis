@@ -135,10 +135,6 @@ def ssh_out(host: str):
     exit(0)
 
 
-def ssh_remote_out(host: str):
-    subprocess.run(["nc", host, "22"])
-
-
 def ssh_relay(host: str):
     subprocess.run(["nc", host, "22"])
 
