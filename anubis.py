@@ -1,5 +1,6 @@
 #!/usr/bin/python3 -u
 
+from random import randint
 import subprocess
 import sys
 
@@ -111,6 +112,23 @@ def ballast_suggest(alias: str) -> str:
         """, 2)
 
 
+def random_host_order(start: int, end: int):
+
+    initial_set: [int] = []
+    for i in range(start, end + 1):
+        initial_set.append(i)
+
+    random_set: [int] = []
+    while len(initial_set) > 0:
+        random_set.append(
+            initial_set.pop(
+                randint(0, len(initial_set))
+            )
+        )
+
+    return random_set
+
+
 def ssh_out(host: str):
     sys.stdout.write(host)
     sys.stdout.flush()
@@ -180,9 +198,9 @@ def anubis():
 
         print_option("\nFinding optimal host for alias: " + alias + "...", ssh_mode)
 
-        runs = 1
+        host_id = 1
         suggested_host = ballast_suggest(alias)
-        while not connected and len(offline) < ALIASES[alias][1] and runs < ALIASES[alias][1] * 2:
+        while not connected and len(offline) < ALIASES[alias][1] and host_id < ALIASES[alias][1] * 2:
             print_option("...", ssh_mode)
             if suggested_host not in offline and host_is_alive(suggested_host):
                 if ssh_mode:
@@ -191,11 +209,12 @@ def anubis():
             elif suggested_host not in offline:
                 offline.append(suggested_host)
             suggested_host = ballast_suggest(alias)
-            runs += 1
+            host_id += 1
 
-        host_id = 1
-        while not connected and host_id <= ALIASES[alias][1]:
-            host = (alias + str(host_id))
+        runs = 0
+        random_host_set = random_host_order(ALIASES[alias][0], ALIASES[alias][1])
+        while not connected and runs < len(random_host_set):
+            host = (alias + random_host_set[runs])
             if host_is_alive(host):
                 if ssh_mode:
                     ssh_out(host)
