@@ -29,7 +29,7 @@ def fail_usage():
 
 def parse_args(args: [str]) -> {}:
 
-    parsed = {"alias": "", "status": False, "connect": False, "last": False, "ssh": False}
+    parsed = {"alias": "", "status": False, "connect": False, "last": False, "relay": False}
 
     if not ("--connect" in args or "-c" in args or "--status" in args or "-s" in args):
         if len(args) > 1:
@@ -39,8 +39,8 @@ def parse_args(args: [str]) -> {}:
                 parsed["connect"] = True
                 if "--last" in args or "-l" in args:
                     parsed["last"] = True
-                if "--ssh" in args:
-                    parsed["ssh"] = True
+                if "--relay" in args:
+                    parsed["relay"] = True
         else:
             fail_usage()
 
@@ -61,16 +61,16 @@ def parse_args(args: [str]) -> {}:
         else:
             fail("Alias missing! Usage: \"alias\" or \"-c alias\"", 1)
 
-        if "--ssh" in args:
-            parsed["ssh"] = True
+        if "--relay" in args and parsed["alias"]:
+            parsed["relay"] = True
 
-        if "--last" in args or "-l" in args:
+        if ("--last" in args or "-l" in args) and parsed["alias"]:
             parsed["last"] = True
 
         parsed["status"] = False
         parsed["connect"] = True
 
-    elif ("--status" in args or "-s" in args) and "--connect" not in args and "-c" not in args:
+    elif ("--status" in args or "-s" in args) and "--connect" not in args and "-c" not in args and "--relay" not in args:
         alias_idx: -1
 
         if "--status" in args:
@@ -130,9 +130,17 @@ def random_host_order(start: int, end: int):
 
 
 def ssh_out(host: str):
-    sys.stdout.write(host)
+    sys.stdout.write("socat stdio tcp:" + host + ":22")
     sys.stdout.flush()
     exit(0)
+
+
+def ssh_remote_out(host: str):
+    subprocess.run(["nc", host, "22"])
+
+
+def ssh_relay(host: str):
+    subprocess.run(["nc", host, "22"])
 
 
 def connect(host: str):
@@ -180,31 +188,31 @@ def anubis():
 
     parsed = parse_args(sys.argv)
     alias = parsed["alias"]
-    ssh_mode = parsed["ssh"]
+    relay_mode = parsed["relay"]
 
     if not (parsed["connect"] or parsed["status"]):
         fail_usage()
 
-    print_option("\nRunning anubis...", ssh_mode)
+    print_option("\nRunning anubis...", relay_mode)
 
     if parsed["connect"]:
         connected = False
         offline: [str] = []
 
         if parsed["last"]:
-            print_option("\nAttempting connection to last " + alias + " host...", ssh_mode)
+            print_option("\nAttempting connection to last " + alias + " host...", relay_mode)
             if connect(alias + "-last"):
                 exit(0)
 
-        print_option("\nFinding optimal host for alias: " + alias + "...", ssh_mode)
+        print_option("\nFinding optimal host for alias: " + alias + "...", relay_mode)
 
         host_id = 1
         suggested_host = ballast_suggest(alias)
         while not connected and len(offline) < ALIASES[alias][1] and host_id < ALIASES[alias][1] * 2:
-            print_option("...", ssh_mode)
+            print_option("...", relay_mode)
             if suggested_host not in offline and host_is_alive(suggested_host):
-                if ssh_mode:
-                    ssh_out(suggested_host)
+                if relay_mode:
+                    ssh_relay(suggested_host)
                 exit(0) if connect(suggested_host) else offline.append(suggested_host)
             elif suggested_host not in offline:
                 offline.append(suggested_host)
@@ -216,7 +224,7 @@ def anubis():
         while not connected and runs < len(random_host_set):
             host = (alias + random_host_set[runs])
             if host_is_alive(host):
-                if ssh_mode:
+                if relay_mode:
                     ssh_out(host)
                 else:
                     connected = connect(host)
@@ -224,7 +232,7 @@ def anubis():
         if not connected:
             fail("No hosts for alias " + alias + " online!"
                                                  "If this error persists, please contact support@cs.usfca.edu", 1)
-        print_option("\n", ssh_mode)
+        print_option("\n", relay_mode)
 
     elif parsed["status"]:
         if alias:
