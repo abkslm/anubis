@@ -214,11 +214,10 @@ def anubis():
                 host_id += 1
 
         print_option("Ballast offline! Picking a host at random...", relay_mode)
-        runs = 0
         random_host_set = random_host_order(ALIASES[alias][0], ALIASES[alias][1])
-        while not connected and runs < len(random_host_set):
+        while not connected and random_host_set:
             print_option("...", relay_mode)
-            host = (alias + random_host_set[runs])
+            host = (alias + random_host_set.pop())
             if host_is_alive(host):
                 if relay_mode:
                     ssh_relay(host)
