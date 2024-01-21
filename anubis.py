@@ -6,6 +6,21 @@ import sys
 ALIASES = {"beagle": [1, 5]}
 
 
+def fail(msg: str, code: int):
+    print(msg, flush=True)
+    sys.exit(code)
+
+
+def fail_usage():
+    fail("\nIncorrect Usage!\n"
+         "\nUsage:\n"
+         "\n\tan \"<alias>\" is a system group name, for example: \"beagle\"\n\n"
+         "\t\"anubis <alias>\" or \"anubis -c (or --connect) <alias>\" to connect\n"
+         "\t\"anubis -s (or --status) <alias>\" for alias status\n"
+         "\t\"anubis -s (or --status)\" for global status\n"
+         "\n\t\"anb\" can be used in place of \"anubis\"\n", 1)
+
+
 def parse_args(args: [str]) -> {}:
     parsed = {"alias": "", "status": False, "connect": False, "last": False}
 
@@ -20,7 +35,7 @@ def parse_args(args: [str]) -> {}:
         else:
             fail_usage()
 
-    elif ("--connect" in args or "-c" in args) and ("--status" not in args and "-s" not in args):
+    elif ("--connect" in args or "-c" in args) and "--status" not in args and "-s" not in args:
         alias_idx = -1
 
         if "--connect" in args:
@@ -35,7 +50,7 @@ def parse_args(args: [str]) -> {}:
             else:
                 fail("Alias " + alias + " is not valid!", 1)
         else:
-            fail("Alias missing! Usage: \"alias\" or \"--flag alias\"", 1)
+            fail("Alias missing! Usage: \"alias\" or \"-c alias\"", 1)
 
         if "--last" in args or "-l" in args:
             parsed["last"] = True
@@ -65,21 +80,6 @@ def parse_args(args: [str]) -> {}:
     return parsed
 
 
-def fail(msg: str, code: int):
-    print(msg, flush=True)
-    sys.exit(code)
-
-
-def fail_usage():
-    fail("\nIncorrect Usage!\n"
-         "\nUsage:\n"
-         "\n\tan \"<alias>\" is a system group name, for example: \"beagle\"\n\n"
-         "\t\"anubis <alias>\" or \"anubis -c <alias>\" (or --connect) to connect\n"
-         "\t\"anubis -s (or --status) <alias>\" for alias status\n"
-         "\t\"anubis -s (or --status)\" for global status\n"
-         "\n\t\"anb\" can be used in place of \"anubis\"\n", 1)
-
-
 def host_is_alive(host: str) -> bool:
     try:
         status, _ = subprocess.getstatusoutput("ping -c 1 -w 1 " + host)
@@ -102,8 +102,13 @@ def ballast_suggest(alias: str) -> str:
 
 def connect(host: str):
     try:
+        connected = False
         print("\nConnecting to host: " + host + "...\n")
-        subprocess.run(["ssh", host])
+        status = subprocess.run(["ssh", host]).returncode
+        if status == 0:
+            connected = True
+            print("\nAnubis session ended. Goodbye!\n\n", end='')
+        return connected
     except subprocess.CalledProcessError:
         fail("Anubis failed to connect to the Ballast-suggested host!", 2)
 
@@ -143,28 +148,31 @@ def anubis():
     print("Running anubis...")
 
     if parsed["connect"]:
-        offline = [str]
         connected = False
+        offline: [str] = []
+
         if parsed["last"]:
-            print("\nAttempting connection to last " + alias + " host", end='')
-            connect(alias + "-last")
-        else:
-            print("\nFinding optimal host for alias " + alias + "...", end='')
-            runs = 0
+            print("\nAttempting connection to last " + alias + " host...", end='')
+            if connect(alias + "-last"):
+                exit(0)
+
+        print("\nFinding optimal host for alias: " + alias + "...", end='')
+
+        runs = 1
+        suggested_host = ballast_suggest(alias)
+        while not connected and len(offline) < ALIASES[alias][1] and runs < ALIASES[alias][1] * 2:
+            print("...", end='')
+            if suggested_host not in offline and host_is_alive(suggested_host):
+                exit(0) if connect(suggested_host) else offline.append(suggested_host)
+            elif suggested_host not in offline:
+                offline.append(suggested_host)
             suggested_host = ballast_suggest(alias)
-            while not connected and len(offline) < ALIASES[alias][1] and runs < ALIASES[alias][1] * 2:
-                print("...", end='')
-                if suggested_host not in offline and host_is_alive(suggested_host):
-                    connect(suggested_host)
-                    connected = True
-                elif suggested_host not in offline:
-                    offline.append(suggested_host)
-                suggested_host = ballast_suggest(alias)
-                runs += 1
-            if not connected:
-                fail("No hosts for alias " + alias + " online!"
-                                                     "If this error persists, please contact support@cs.usfca.edu", 1)
-            print()
+            runs += 1
+
+        if not connected:
+            fail("No hosts for alias " + alias + " online!"
+                                                 "If this error persists, please contact support@cs.usfca.edu", 1)
+        print()
 
     elif parsed["status"]:
         if alias:
