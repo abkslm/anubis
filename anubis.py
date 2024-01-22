@@ -51,11 +51,11 @@ def parse_args(args: [str]) -> {}:
             fail_usage()
 
     elif ("--connect" in args or "-c" in args) and "--status" not in args and "-s" not in args:
-        alias_idx = -1
+        alias_idx: int
 
         if "--connect" in args:
             alias_idx = args.index("--connect") + 1
-        elif "-c" in args:
+        else:
             alias_idx = args.index("-c") + 1
 
         if len(args) > alias_idx > 1:
@@ -65,7 +65,7 @@ def parse_args(args: [str]) -> {}:
             else:
                 fail("Alias " + alias + " is not valid!", 1)
         else:
-            fail("Alias missing! Usage: \"alias\" or \"-c alias\"", 1)
+            fail("Alias missing! Usage: \"anubis alias\" or \"anubis -c alias\"", 1)
 
         if "--relay" in args:
             parsed["relay"] = True
@@ -83,7 +83,7 @@ def parse_args(args: [str]) -> {}:
     elif (("--status" in args or "-s" in args)
           and "--connect" not in args and "-c" not in args
           and "--relay" not in args):
-        alias_idx: -1
+        alias_idx: int
 
         if "--status" in args:
             alias_idx = args.index("--status") + 1
@@ -207,7 +207,6 @@ def anubis():
     print_option("\nRunning anubis...", relay_mode)
 
     if options["connect"]:
-        connected = False
         offline: [str] = []
 
         print_option("\nFinding optimal host for alias: " + alias + "...", relay_mode)
@@ -215,7 +214,7 @@ def anubis():
         runs = 1
         suggested_host = ballast_suggest(alias)
         if suggested_host:
-            while not connected and len(offline) < ALIASES[alias][1] and runs < ALIASES[alias][1] * 2:
+            while len(offline) < ALIASES[alias][1] and runs < ALIASES[alias][1] * 2:
                 print_option("...", relay_mode)
                 if suggested_host not in offline and host_is_alive(suggested_host):
                     if relay_mode:
@@ -232,22 +231,20 @@ def anubis():
 
         print_option("Ballast offline! Picking a host at random...", relay_mode)
         random_host_set = random_host_order(ALIASES[alias][0], ALIASES[alias][1])
-        while not connected and random_host_set:
+        while random_host_set:
             print_option("...", relay_mode)
             host = (alias + random_host_set.pop())
             if host not in offline and host_is_alive(host):
                 if relay_mode:
                     ssh_relay(host)
-                else:
-                    exit(0) if connect(host, options["forward"]) else offline.append(host)
-            else:
+                exit(0) if connect(host, options["forward"]) else offline.append(host)
+            elif suggested_host not in offline:
                 offline.append(host)
+
         print_option("\n", relay_mode)
 
-        if not connected:
-            fail("No hosts for alias " + alias + " connectable!\n"
-                                                 "If this error persists, please contact support@cs.usfca.edu", 1)
-        print_option("\n", relay_mode)
+        fail("No hosts for alias " + alias + " connectable!\n"
+                                             "If this error persists, please contact support@cs.usfca.edu", 2)
 
     elif options["status"]:
         if alias:
