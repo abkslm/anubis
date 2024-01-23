@@ -11,7 +11,7 @@ __copyright__ = "Copyright 2024, University of San Francisco, Department of Comp
 __credits__ = ["Andrew B. Moore"]
 
 __license__ = "None"
-__version__ = "1.10.2"
+__version__ = "1.10.4"
 __maintainer__ = "Andrew B. Moore"
 __email__ = "support@cs.usfca.edu"
 __status__ = "Production"
@@ -86,10 +86,7 @@ def ballast_suggest(alias: str) -> str:
 
 
 def random_host_order(start: int, end: int) -> [int]:
-    random_list: [int] = []
-    for i in range(start, end + 1):
-        random_list.append(i)
-
+    random_list: [int] = list(range(start, end + 1))
     shuffle(random_list)
     return random_list
 
