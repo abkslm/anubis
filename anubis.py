@@ -1,9 +1,19 @@
 #!/usr/bin/python3 -u
 
+from subprocess import run, getstatusoutput, check_output, CalledProcessError, CompletedProcess
 from datetime import datetime
 from random import randint
-import subprocess
-import sys
+from sys import argv, exit
+
+__author__ = "Andrew B. Moore"
+__copyright__ = "Copyright 2024, University of San Francisco, Department of Computer Science"
+__credits__ = ["Andrew B. Moore"]
+
+__license__ = "None"
+__version__ = "1.9.1"
+__maintainer__ = "Andrew B. Moore"
+__email__ = "support@cs.usfca.edu"
+__status__ = "Production"
 
 ALIASES = {"beagle": [1, 5]}
 
@@ -15,7 +25,7 @@ def print_option(string: str, silent: bool):
 
 def fail(msg: str, code: int):
     print(msg)
-    sys.exit(code)
+    exit(code)
 
 
 def fail_usage():
@@ -106,22 +116,22 @@ def parse_args(args: [str]) -> {}:
 
 def host_is_alive(host: str) -> bool:
     try:
-        status, _ = subprocess.getstatusoutput("ping -c 1 -w 1 " + host)
+        status, _ = getstatusoutput("ping -c 1 -w 1 " + host)
         if status == 0:
             return True
         return False
-    except subprocess.CalledProcessError:
+    except CalledProcessError:
         fail("Could not check if host \"" + host + "\" is alive!", 2)
 
 
 def ballast_suggest(alias: str) -> str:
     try:
-        return subprocess.check_output(["/usr/local/bin/ballast", "-l", alias]).decode("utf-8").split('.')[0]
-    except subprocess.CalledProcessError:
+        return check_output(["/usr/local/bin/ballast", "-l", alias]).decode("utf-8").split('.')[0]
+    except CalledProcessError:
         return ""
 
 
-def random_host_order(start: int, end: int):
+def random_host_order(start: int, end: int) -> [int]:
     initial_set: [int] = []
     for i in range(start, end + 1):
         initial_set.append(i)
@@ -140,19 +150,19 @@ def random_host_order(start: int, end: int):
 
 
 def ssh_relay(host: str):
-    subprocess.run(["nc", host, "22"])
+    run(["nc", host, "22"])
 
 
-def connect(host: str, forward_agent: bool):
+def connect(host: str, forward_agent: bool) -> bool:
     try:
         print("\nConnecting to host: " + host + "...\n")
 
-        completed_process: subprocess.CompletedProcess[bytes]
+        completed_process: CompletedProcess[bytes]
         start_time = datetime.now()
         if forward_agent:
-            completed_process = subprocess.run(["ssh", host, "-q", "-o", "ForwardAgent=yes"])
+            completed_process = run(["ssh", host, "-q", "-o", "ForwardAgent=yes"])
         else:
-            completed_process = subprocess.run(["ssh", host, "-q", "-o", "ConnectTimeout=1"])
+            completed_process = run(["ssh", host, "-q", "-o", "ConnectTimeout=1"])
 
         end_time = datetime.now()
         conn_time = (end_time - start_time).total_seconds()
@@ -165,7 +175,7 @@ def connect(host: str, forward_agent: bool):
             print("anubis session ended. Goodbye!\n\n", end='')
             return True
 
-    except subprocess.CalledProcessError:
+    except CalledProcessError:
         fail("Anubis failed to connect to host: " + host, 2)
 
 
@@ -197,7 +207,7 @@ def print_statuses(alias: str):
 
 
 def anubis():
-    options = parse_args(sys.argv)
+    options = parse_args(argv)
     alias = options["alias"]
     relay_mode = options["relay"]
 
