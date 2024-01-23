@@ -11,7 +11,7 @@ __copyright__ = "Copyright 2024, University of San Francisco, Department of Comp
 __credits__ = ["Andrew B. Moore"]
 
 __license__ = "None"
-__version__ = "1.10.4"
+__version__ = "1.10.5"
 __maintainer__ = "Andrew B. Moore"
 __email__ = "support@cs.usfca.edu"
 __status__ = "Production"
@@ -76,6 +76,8 @@ def anubis():
             print("\nGlobal Status:")
             for alias in ALIASES.keys():
                 print_statuses(alias)
+
+    exit(0)
 
 
 def ballast_suggest(alias: str) -> str:
