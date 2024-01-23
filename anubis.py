@@ -4,206 +4,19 @@ from subprocess import run, getstatusoutput, check_output, CalledProcessError, C
 from datetime import datetime
 from random import randint
 from sys import argv, exit
+from gc import collect
 
 __author__ = "Andrew B. Moore"
 __copyright__ = "Copyright 2024, University of San Francisco, Department of Computer Science"
 __credits__ = ["Andrew B. Moore"]
 
 __license__ = "None"
-__version__ = "1.9.1"
+__version__ = "1.10.0"
 __maintainer__ = "Andrew B. Moore"
 __email__ = "support@cs.usfca.edu"
 __status__ = "Production"
 
 ALIASES = {"beagle": [1, 5]}
-
-
-def print_option(string: str, silent: bool):
-    if not silent:
-        print(string, end='')
-
-
-def fail(msg: str, code: int):
-    print(msg)
-    exit(code)
-
-
-def fail_usage():
-    fail("\nIncorrect Usage!\n"
-         "\nUsage:\n"
-         "\n\tan \"<alias>\" is a system group name, for example: \"beagle\"\n\n"
-         "\t\"anubis <alias>\" or \"anubis -c (or --connect) <alias>\" to connect\n"
-         "\t\"anubis -c <alias> --forward\" or \"anubis <alias> -f\" to forward SSH Agent\n"
-         "\t\"anubis -s (or --status) <alias>\" for alias status\n"
-         "\t\"anubis -s (or --status)\" for global status\n"
-         "\n\t\"anb\" can be used in place of \"anubis\"\n"
-         "\n\tFor example (connect to alias \"beagle\" and forward SSH Agent):\n"
-         "\t\t\"anb beagle -f\" or \"anubis --connect beagle --forward\"\n", 1)
-
-
-def parse_args(args: [str]) -> {}:
-    parsed = {"alias": "", "status": False, "connect": False, "relay": False, "forward": False}
-
-    if not ("--connect" in args or "-c" in args or "--status" in args or "-s" in args):
-        if len(args) > 1:
-            alias = args[1]
-            if alias in ALIASES.keys():
-                parsed["alias"] = alias
-                parsed["connect"] = True
-                if "--relay" in args and ("--forward" not in args and "-f" not in args):
-                    parsed["relay"] = True
-                elif "--relay" in args and ("--forward" in args or "-f" in args):
-                    fail("--relay may only be used in SSH ProxyCommand.\n"
-                         "Please use \"ForwardAgent yes\" in SSH invocation to forward SSH Agent.", 2)
-                elif "--forward" in args or "-f" in args:
-                    parsed["forward"] = True
-        else:
-            fail_usage()
-
-    elif ("--connect" in args or "-c" in args) and "--status" not in args and "-s" not in args:
-        alias_idx: int
-
-        if "--connect" in args:
-            alias_idx = args.index("--connect") + 1
-        else:
-            alias_idx = args.index("-c") + 1
-
-        if len(args) > alias_idx > 1:
-            alias = args[alias_idx]
-            if alias in ALIASES.keys():
-                parsed["alias"] = alias
-            else:
-                fail("Alias " + alias + " is not valid!", 1)
-        else:
-            fail("Alias missing! Usage: \"anubis alias\" or \"anubis -c alias\"", 1)
-
-        if "--relay" in args:
-            parsed["relay"] = True
-        elif "--relay" in args and ("--forward" in args or "-f" in args):
-            fail("--relay may only be used in SSH ProxyCommand.\n"
-                 "Please use \"ForwardAgent yes\" in SSH invocation to forward SSH Agent.", 2)
-        else:
-
-            if "--forward" in args or "-f" in args:
-                parsed["forward"] = True
-
-        parsed["status"] = False
-        parsed["connect"] = True
-
-    elif (("--status" in args or "-s" in args)
-          and "--connect" not in args and "-c" not in args
-          and "--relay" not in args):
-        alias_idx: int
-
-        if "--status" in args:
-            alias_idx = args.index("--status") + 1
-        else:
-            alias_idx = args.index("-s") + 1
-
-        if len(args) > alias_idx > 1:
-            alias = args[alias_idx]
-            if alias in ALIASES.keys():
-                parsed["alias"] = alias
-            else:
-                fail("Alias " + alias + " is not valid!", 1)
-        parsed["status"] = True
-
-    else:
-        fail_usage()
-
-    return parsed
-
-
-def host_is_alive(host: str) -> bool:
-    try:
-        status, _ = getstatusoutput("ping -c 1 -w 1 " + host)
-        if status == 0:
-            return True
-        return False
-    except CalledProcessError:
-        fail("Could not check if host \"" + host + "\" is alive!", 2)
-
-
-def ballast_suggest(alias: str) -> str:
-    try:
-        return check_output(["/usr/local/bin/ballast", "-l", alias]).decode("utf-8").split('.')[0]
-    except CalledProcessError:
-        return ""
-
-
-def random_host_order(start: int, end: int) -> [int]:
-    initial_set: [int] = []
-    for i in range(start, end + 1):
-        initial_set.append(i)
-
-    random_set: [int] = []
-    while len(initial_set) > 0:
-        random_set.append(
-            str(
-                initial_set.pop(
-                    randint(0, len(initial_set) - 1)
-                )
-            )
-        )
-
-    return random_set
-
-
-def ssh_relay(host: str):
-    run(["nc", host, "22"])
-
-
-def connect(host: str, forward_agent: bool) -> bool:
-    try:
-        print("\nConnecting to host: " + host + "...\n")
-
-        completed_process: CompletedProcess[bytes]
-        start_time = datetime.now()
-        if forward_agent:
-            completed_process = run(["ssh", host, "-q", "-o", "ForwardAgent=yes"])
-        else:
-            completed_process = run(["ssh", host, "-q", "-o", "ConnectTimeout=1"])
-
-        end_time = datetime.now()
-        conn_time = (end_time - start_time).total_seconds()
-        conn_time_str = ("{:.1f} minutes ({:.2f}s)"
-                         .format((conn_time / 60), conn_time)) \
-            if conn_time < 36 * 600 else "Way too long :)"
-
-        if completed_process.returncode == 0 or conn_time > 1.0:
-            print("\nConnected to " + host + " for: " + conn_time_str)
-            print("anubis session ended. Goodbye!\n\n", end='')
-            return True
-
-    except CalledProcessError:
-        fail("Anubis failed to connect to host: " + host, 2)
-
-
-def print_statuses(alias: str):
-    print("\nStatus for nodes in alias " + alias + ":")
-
-    start_id = ALIASES[alias][0]
-    end_id = ALIASES[alias][1]
-
-    statuses = {}
-
-    print("Pinging...", end='')
-
-    for i in range(start_id, end_id + 1):
-        host = alias + str(i)
-        if host_is_alive(host):
-            statuses[host] = True
-        else:
-            statuses[host] = False
-        print("...", end='')
-    print("Done.\n")
-
-    for host in statuses.keys():
-        if statuses[host]:
-            print(str(host) + ": ✅ online\n", end='')
-        else:
-            print(str(host) + ": ❌ offline\n", end='')
-    print()
 
 
 def anubis():
@@ -263,6 +76,198 @@ def anubis():
             print("\nGlobal Status:")
             for alias in ALIASES.keys():
                 print_statuses(alias)
+
+
+def ballast_suggest(alias: str) -> str:
+    try:
+        return check_output(["/usr/local/bin/ballast", "-l", alias]).decode("utf-8").split('.')[0]
+    except CalledProcessError:
+        return ""
+
+
+def random_host_order(start: int, end: int) -> [int]:
+    initial_set: [int] = []
+    for i in range(start, end + 1):
+        initial_set.append(i)
+
+    random_set: [int] = []
+    while len(initial_set) > 0:
+        random_set.append(
+            str(
+                initial_set.pop(
+                    randint(0, len(initial_set) - 1)
+                )
+            )
+        )
+
+    return random_set
+
+
+def host_is_alive(host: str) -> bool:
+    try:
+        status, _ = getstatusoutput("ping -c 1 -w 1 " + host)
+        if status == 0:
+            return True
+        return False
+    except CalledProcessError:
+        fail("Could not check if host \"" + host + "\" is alive!", 2)
+
+
+def ssh_relay(host: str):
+    collect()
+    run(["nc", host, "22"])
+
+
+def connect(host: str, forward_agent: bool) -> bool:
+    collect()
+    try:
+        print("\nConnecting to host: " + host + "...\n")
+
+        completed_process: CompletedProcess[bytes]
+        start_time = datetime.now()
+        if forward_agent:
+            completed_process = run(["ssh", host, "-q", "-o", "ForwardAgent=yes"])
+        else:
+            completed_process = run(["ssh", host, "-q", "-o", "ConnectTimeout=1"])
+
+        end_time = datetime.now()
+        conn_time = (end_time - start_time).total_seconds()
+        conn_time_str = ("{:.1f} minutes ({:.2f}s)"
+                         .format((conn_time / 60), conn_time)) \
+            if conn_time < 36 * 600 else "Way too long :)"
+
+        if completed_process.returncode == 0 or conn_time > 1.0:
+            print("\nConnected to " + host + " for: " + conn_time_str)
+            print("anubis session ended. Goodbye!\n\n", end='')
+            return True
+
+    except CalledProcessError:
+        fail("Anubis failed to connect to host: " + host, 2)
+
+
+def parse_args(args: [str]) -> {str: str or bool}:
+    parsed = {"alias": "", "status": False, "connect": False, "relay": False, "forward": False}
+
+    if not ("--connect" in args or "-c" in args or "--status" in args or "-s" in args):
+        if len(args) > 1:
+            alias = args[1]
+            if alias in ALIASES.keys():
+                parsed["alias"] = alias
+                parsed["connect"] = True
+                if "--relay" in args and ("--forward" not in args and "-f" not in args):
+                    parsed["relay"] = True
+                elif "--relay" in args and ("--forward" in args or "-f" in args):
+                    fail("\n\"--relay\" may only be used in SSH ProxyCommand.\n"
+                         "\nPlease use \"ForwardAgent yes\" in SSH config to forward SSH Agent\n"
+                         "\tOR\n"
+                         "Invoke anubis without --relay (eg \"anubis <alias> --forward\")\n", 2)
+                elif "--forward" in args or "-f" in args:
+                    parsed["forward"] = True
+        else:
+            fail_usage()
+
+    elif ("--connect" in args or "-c" in args) and "--status" not in args and "-s" not in args:
+        alias_idx: int
+
+        if "--connect" in args:
+            alias_idx = args.index("--connect") + 1
+        else:
+            alias_idx = args.index("-c") + 1
+
+        if len(args) > alias_idx > 1:
+            alias = args[alias_idx]
+            if alias in ALIASES.keys():
+                parsed["alias"] = alias
+            else:
+                fail("Alias " + alias + " is not valid!", 1)
+        else:
+            fail("Alias missing! Usage: \"anubis alias\" or \"anubis -c alias\"", 1)
+
+        if "--relay" in args:
+            parsed["relay"] = True
+        elif "--relay" in args and ("--forward" in args or "-f" in args):
+            fail("--relay may only be used in SSH ProxyCommand.\n"
+                 "Please use \"ForwardAgent yes\" in SSH invocation to forward SSH Agent.", 2)
+        else:
+
+            if "--forward" in args or "-f" in args:
+                parsed["forward"] = True
+
+        parsed["status"] = False
+        parsed["connect"] = True
+
+    elif (("--status" in args or "-s" in args)
+          and "--connect" not in args and "-c" not in args
+          and "--relay" not in args):
+        alias_idx: int
+
+        if "--status" in args:
+            alias_idx = args.index("--status") + 1
+        else:
+            alias_idx = args.index("-s") + 1
+
+        if len(args) > alias_idx > 1:
+            alias = args[alias_idx]
+            if alias in ALIASES.keys():
+                parsed["alias"] = alias
+            else:
+                fail("Alias " + alias + " is not valid!", 1)
+        parsed["status"] = True
+
+    else:
+        fail_usage()
+
+    return parsed
+
+
+def print_option(string: str, silent: bool):
+    if not silent:
+        print(string, end='')
+
+
+def print_statuses(alias: str):
+    print("\nStatus for nodes in alias " + alias + ":")
+
+    start_id = ALIASES[alias][0]
+    end_id = ALIASES[alias][1]
+
+    statuses = {}
+
+    print("Pinging...", end='')
+
+    for i in range(start_id, end_id + 1):
+        host = alias + str(i)
+        if host_is_alive(host):
+            statuses[host] = True
+        else:
+            statuses[host] = False
+        print("...", end='')
+    print("Done.\n")
+
+    for host in statuses.keys():
+        if statuses[host]:
+            print(str(host) + ": ✅ online\n", end='')
+        else:
+            print(str(host) + ": ❌ offline\n", end='')
+    print()
+
+
+def fail_usage():
+    fail("\nIncorrect Usage!\n"
+         "\nUsage:\n"
+         "\n\tan \"<alias>\" is a system group name, for example: \"beagle\"\n\n"
+         "\t\"anubis <alias>\" or \"anubis -c (or --connect) <alias>\" to connect\n"
+         "\t\"anubis -c <alias> --forward\" or \"anubis <alias> -f\" to forward SSH Agent\n"
+         "\t\"anubis -s (or --status) <alias>\" for alias status\n"
+         "\t\"anubis -s (or --status)\" for global status\n"
+         "\n\t\"anb\" can be used in place of \"anubis\"\n"
+         "\n\tFor example (connect to alias \"beagle\" and forward SSH Agent):\n"
+         "\t\t\"anb beagle -f\" or \"anubis --connect beagle --forward\"\n", 1)
+
+
+def fail(msg: str, code: int):
+    print(msg)
+    exit(code)
 
 
 try:
