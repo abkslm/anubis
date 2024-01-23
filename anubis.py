@@ -2,7 +2,7 @@
 
 from subprocess import run, getstatusoutput, check_output, CalledProcessError, CompletedProcess
 from datetime import datetime
-from random import randint
+from random import shuffle
 from sys import argv, exit
 from gc import collect
 
@@ -11,7 +11,7 @@ __copyright__ = "Copyright 2024, University of San Francisco, Department of Comp
 __credits__ = ["Andrew B. Moore"]
 
 __license__ = "None"
-__version__ = "1.10.1"
+__version__ = "1.10.2"
 __maintainer__ = "Andrew B. Moore"
 __email__ = "support@cs.usfca.edu"
 __status__ = "Production"
@@ -53,10 +53,10 @@ def anubis():
         print_option("\n", relay_mode)
 
         print_option("Ballast offline! Picking a host at random...", relay_mode)
-        random_host_set = random_host_order(ALIASES[alias][0], ALIASES[alias][1])
-        while random_host_set:
+        random_hosts = random_host_order(ALIASES[alias][0], ALIASES[alias][1])
+        while random_hosts:
             print_option("...", relay_mode)
-            host = (alias + str(random_host_set.pop()))
+            host = (alias + str(random_hosts.pop()))
             if host not in offline and host_is_alive(host):
                 if relay_mode:
                     ssh_relay(host)
@@ -85,20 +85,13 @@ def ballast_suggest(alias: str) -> str:
         return ""
 
 
-def random_host_order(start: int, end: int) -> set[int]:
-    initial_list: [int] = []
+def random_host_order(start: int, end: int) -> [int]:
+    random_list: [int] = []
     for i in range(start, end + 1):
-        initial_list.append(i)
+        random_list.append(i)
 
-    random_set: set[int] = set()
-    while len(initial_list) > 0:
-        random_set.add(
-                initial_list.pop(
-                    randint(0, len(initial_list) - 1)
-                )
-        )
-
-    return random_set
+    shuffle(random_list)
+    return random_list
 
 
 def host_is_alive(host: str) -> bool:
