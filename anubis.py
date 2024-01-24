@@ -4,14 +4,13 @@ from subprocess import run, getstatusoutput, check_output, CalledProcessError, C
 from datetime import datetime
 from random import shuffle
 from sys import argv, exit
-from gc import collect
 
 __author__ = "Andrew B. Moore"
 __copyright__ = "Copyright 2024, University of San Francisco, Department of Computer Science"
 __credits__ = ["Andrew B. Moore"]
 
 __license__ = "None"
-__version__ = "1.10.5"
+__version__ = "1.10.6"
 __maintainer__ = "Andrew B. Moore"
 __email__ = "support@cs.usfca.edu"
 __status__ = "Production"
@@ -85,6 +84,8 @@ def ballast_suggest(alias: str) -> str:
         return check_output(["/usr/local/bin/ballast", "-l", alias]).decode("utf-8").split('.')[0]
     except CalledProcessError:
         return ""
+    except KeyboardInterrupt:
+        fail_interrupt("Ballast suggestion")
 
 
 def random_host_order(start: int, end: int) -> [int]:
@@ -101,15 +102,21 @@ def host_is_alive(host: str) -> bool:
         return False
     except CalledProcessError:
         fail("Could not check if host \"" + host + "\" is alive!", 2)
+    except KeyboardInterrupt:
+        fail_interrupt("Liveness check")
 
 
 def ssh_relay(host: str):
-    collect()
-    run(["nc", host, "22"])
+    try:
+        run(["nc", host, "22"])
+    except CalledProcessError:
+        fail("Could not form an SSH relay!\n"
+             "Please contact support@cs.usfca.edu if this error persists.", 2)
+    except KeyboardInterrupt:
+        exit(1)
 
 
 def connect(host: str, forward_agent: bool) -> bool:
-    collect()
     try:
         print("\nConnecting to host: " + host + "...\n")
 
@@ -133,6 +140,8 @@ def connect(host: str, forward_agent: bool) -> bool:
 
     except CalledProcessError:
         fail("Anubis failed to connect to host: " + host, 2)
+    except KeyboardInterrupt:
+        fail_interrupt("Connection")
 
 
 def parse_args(args: [str]) -> {str: str or bool}:
@@ -179,7 +188,6 @@ def parse_args(args: [str]) -> {str: str or bool}:
             fail("--relay may only be used in SSH ProxyCommand.\n"
                  "Please use \"ForwardAgent yes\" in SSH invocation to forward SSH Agent.", 2)
         else:
-
             if "--forward" in args or "-f" in args:
                 parsed["forward"] = True
 
@@ -255,6 +263,10 @@ def fail_usage():
          "\t\t\"anb beagle -f\" or \"anubis --connect beagle --forward\"\n", 1)
 
 
+def fail_interrupt(process: str):
+    fail(process + " interrupted by keyboard (likely ^C), exiting anubis.\n", 1)
+
+
 def fail(msg: str, code: int):
     print(msg)
     exit(code)
@@ -265,3 +277,4 @@ try:
 except KeyboardInterrupt:
     print("\n\nExiting anubis...\n"
           "Goodbye!\n")
+    exit(1)
