@@ -277,4 +277,7 @@ try:
 except KeyboardInterrupt:
     print("\n\nExiting anubis...\n"
           "Goodbye!\n")
-    exit(1)
+    exit(0)
+except BrokenPipeError:
+    fail("Pipe broken! This was likely caused by a keyboard interrupt (^C). Please try again.\n"
+         "If this error persists, please contact support@cs.usfca.edu\n", 2)
