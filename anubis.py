@@ -10,7 +10,7 @@ __copyright__ = "Copyright 2024, University of San Francisco, Department of Comp
 __credits__ = ["Andrew B. Moore"]
 
 __license__ = "None"
-__version__ = "1.10.6"
+__version__ = "1.11.0"
 __maintainer__ = "Andrew B. Moore"
 __email__ = "support@cs.usfca.edu"
 __status__ = "Production"
